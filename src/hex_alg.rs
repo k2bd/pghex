@@ -2,7 +2,7 @@ use std::ops::{Add, Sub};
 
 use crate::Hex;
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, Eq, Hash)]
 pub struct CubeCoord {
     q: i32,
     r: i32,
@@ -22,7 +22,7 @@ const EPSILON_HEX: FloatCubeCoord = FloatCubeCoord {
     s: -3e-6,
 };
 
-pub struct LineDrawIter {
+pub struct HexLineDrawIter {
     start: FloatCubeCoord,
     end: FloatCubeCoord,
     distance: i32,
@@ -30,7 +30,7 @@ pub struct LineDrawIter {
     next_i: i32,
 }
 
-impl LineDrawIter {
+impl HexLineDrawIter {
     fn new(start: CubeCoord, end: CubeCoord) -> Self {
         let distance = start.dist(end);
         Self {
@@ -43,7 +43,7 @@ impl LineDrawIter {
     }
 }
 
-impl Iterator for LineDrawIter {
+impl Iterator for HexLineDrawIter {
     type Item = CubeCoord;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -59,6 +59,46 @@ impl Iterator for LineDrawIter {
         self.next_i += 1;
 
         Some(next_coord)
+    }
+}
+
+pub struct HexRangeIter {
+    center: CubeCoord,
+    dist: i32,
+    q: i32,
+    r: i32,
+}
+
+impl HexRangeIter {
+    fn new(center: CubeCoord, dist: i32) -> Self {
+        HexRangeIter {
+            center,
+            dist,
+            q: -dist,
+            r: 0,
+        }
+    }
+}
+
+impl Iterator for HexRangeIter {
+    type Item = CubeCoord;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let r_max = self.dist.min(-self.q + self.dist);
+        if (self.q > self.dist) {
+            return None;
+        }
+
+        let new_coord = self.center + CubeCoord::new(self.q, self.r, -self.q - self.r);
+        println!("{:?}", new_coord);
+
+        self.r += 1;
+        if (self.r > r_max) {
+            self.q += 1;
+            self.r = (-self.dist).max(-self.q - self.dist);
+        }
+
+        Some(new_coord)
     }
 }
 
@@ -173,8 +213,12 @@ impl CubeCoord {
         (*self - other).abs()
     }
 
-    pub fn linedraw(&self, other: CubeCoord) -> LineDrawIter {
-        LineDrawIter::new(*self, other)
+    pub fn linedraw(&self, other: CubeCoord) -> HexLineDrawIter {
+        HexLineDrawIter::new(*self, other)
+    }
+
+    pub fn range(&self, dist: i32) -> HexRangeIter {
+        HexRangeIter::new(*self, dist)
     }
 }
 
@@ -205,7 +249,7 @@ impl From<FloatCubeCoord> for CubeCoord {
 
         if (q_diff > r_diff) && (q_diff > s_diff) {
             q = -r - s;
-        } else if (r_diff > s_diff) {
+        } else if r_diff > s_diff {
             r = -q - s;
         } else {
             s = -q - r;
@@ -227,6 +271,8 @@ impl From<CubeCoord> for FloatCubeCoord {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use rstest::*;
 
@@ -308,6 +354,12 @@ mod tests {
         CubeCoord::new(2, -2, 0),
         CubeCoord::new(3, -3, 0),
     ])]
+    #[case(CubeCoord::new(-3, 0, 3), CubeCoord::new(0, 0, 0), vec![
+        CubeCoord::new(-3, 0, 3),
+        CubeCoord::new(-2, 0, 2),
+        CubeCoord::new(-1, 0, 1),
+        CubeCoord::new(0, 0, 0),
+    ])]
     fn test_linedraw(
         #[case] from: CubeCoord,
         #[case] to: CubeCoord,
@@ -315,5 +367,39 @@ mod tests {
     ) {
         let line = from.linedraw(to).collect::<Vec<_>>();
         assert_eq!(line, expected);
+    }
+
+    #[rstest]
+    #[case(CubeCoord::new(0, 0, 0))]
+    #[case(CubeCoord::new(100, -5, -95))]
+    fn test_range(#[case] center: CubeCoord) {
+        let dist = 2;
+        let expected = [
+            CubeCoord::new(0, 0, 0),
+            CubeCoord::new(1, -1, 0),
+            CubeCoord::new(1, 0, -1),
+            CubeCoord::new(-1, 1, 0),
+            CubeCoord::new(-1, 0, 1),
+            CubeCoord::new(0, -1, 1),
+            CubeCoord::new(0, 1, -1),
+            CubeCoord::new(0, -2, 2),
+            CubeCoord::new(1, -2, 1),
+            CubeCoord::new(2, -2, 0),
+            CubeCoord::new(-1, -1, 2),
+            CubeCoord::new(2, -1, -1),
+            CubeCoord::new(-2, 0, 2),
+            CubeCoord::new(2, 0, -2),
+            CubeCoord::new(-2, 1, 1),
+            CubeCoord::new(1, 1, -2),
+            CubeCoord::new(-2, 2, 0),
+            CubeCoord::new(-1, 2, -1),
+            CubeCoord::new(0, 2, -2),
+        ]
+        .iter()
+        .map(|&coord| coord + center)
+        .collect::<HashSet<_>>();
+
+        let range = center.range(dist).collect::<HashSet<_>>();
+        assert_eq!(range, expected);
     }
 }

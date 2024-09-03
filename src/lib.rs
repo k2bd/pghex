@@ -1,3 +1,4 @@
+use hex_alg::CubeCoord;
 use pgrx::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -44,20 +45,20 @@ fn hex_eq(left: Hex, right: Hex) -> bool {
 #[pg_operator]
 #[opname(+)]
 fn hex_add(left: Hex, right: Hex) -> Hex {
-    (hex_alg::CubeCoord::from(left) + hex_alg::CubeCoord::from(right)).into()
+    (CubeCoord::from(left) + CubeCoord::from(right)).into()
 }
 
 #[pg_operator]
 #[opname(-)]
 fn hex_sub(left: Hex, right: Hex) -> Hex {
-    (hex_alg::CubeCoord::from(left) - hex_alg::CubeCoord::from(right)).into()
+    (CubeCoord::from(left) - CubeCoord::from(right)).into()
 }
 
 // Functions
 #[pg_extern]
 fn neighbors(coord: Hex) -> SetOfIterator<'static, Hex> {
     SetOfIterator::new(
-        hex_alg::CubeCoord::from(coord)
+        CubeCoord::from(coord)
             .neighbors()
             .into_iter()
             .map(|cube| cube.into()),
@@ -67,7 +68,7 @@ fn neighbors(coord: Hex) -> SetOfIterator<'static, Hex> {
 #[pg_extern]
 fn diagonals(coord: Hex) -> SetOfIterator<'static, Hex> {
     SetOfIterator::new(
-        hex_alg::CubeCoord::from(coord)
+        CubeCoord::from(coord)
             .diagonals()
             .into_iter()
             .map(|cube| cube.into()),
@@ -75,8 +76,22 @@ fn diagonals(coord: Hex) -> SetOfIterator<'static, Hex> {
 }
 
 #[pg_extern]
-fn dist(coord: Hex, other: Hex) -> i32 {
-    hex_alg::CubeCoord::from(coord).dist(hex_alg::CubeCoord::from(other))
+fn hex_distance(coord: Hex, other: Hex) -> i32 {
+    CubeCoord::from(coord).dist(CubeCoord::from(other))
+}
+
+#[pg_extern]
+fn linedraw(coord: Hex, other: Hex) -> SetOfIterator<'static, Hex> {
+    SetOfIterator::new(
+        CubeCoord::from(coord)
+            .linedraw(CubeCoord::from(other))
+            .map(|cube| cube.into()),
+    )
+}
+
+#[pg_extern]
+fn hexes_in_range(coord: Hex, dist: i32) -> SetOfIterator<'static, Hex> {
+    SetOfIterator::new(CubeCoord::from(coord).range(dist).map(|cube| cube.into()))
 }
 
 #[cfg(any(test, feature = "pg_test"))]
@@ -118,10 +133,28 @@ mod tests {
 
     #[pg_test]
     fn test_dist() {
-        let result = Spi::get_one::<i32>("select dist('[1,2]'::hex, '[3,-4]'::hex)")
+        let result = Spi::get_one::<i32>("select hex_distance('[1,2]'::hex, '[3,-4]'::hex)")
             .unwrap()
             .unwrap();
         assert_eq!(result, 6)
+    }
+
+    #[pg_test]
+    /// N.B. unfortunately at the moment I can only work out how to get the first result...
+    fn test_linedraw() {
+        let result = Spi::get_one::<Hex>("select linedraw('[-3,0]'::hex, '[3, -3]'::hex)")
+            .unwrap()
+            .unwrap();
+        assert_eq!(result, Hex { q: -3, r: 0 })
+    }
+
+    #[pg_test]
+    /// N.B. unfortunately at the moment I can only work out how to get the first result...
+    fn test_hexes_in_range() {
+        let result = Spi::get_one::<Hex>("select hexes_in_range('[-3,1]'::hex, 2)")
+            .unwrap()
+            .unwrap();
+        assert_eq!(result, Hex { q: -5, r: 1 })
     }
 }
 
