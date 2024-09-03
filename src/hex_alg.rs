@@ -85,7 +85,7 @@ impl Iterator for HexRangeIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         let r_max = self.dist.min(-self.q + self.dist);
-        if (self.q > self.dist) {
+        if self.q > self.dist {
             return None;
         }
 
@@ -93,7 +93,7 @@ impl Iterator for HexRangeIter {
         println!("{:?}", new_coord);
 
         self.r += 1;
-        if (self.r > r_max) {
+        if self.r > r_max {
             self.q += 1;
             self.r = (-self.dist).max(-self.q - self.dist);
         }
