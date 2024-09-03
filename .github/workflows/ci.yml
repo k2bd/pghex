@@ -12,7 +12,9 @@ jobs:
         run: cargo install --locked cargo-pgrx
       - name: Setup PGRX
         run: cargo pgrx init
-      - name: Linting
+      - name: Rustfmt
+        run: cargo fmt --check
+      - name: Clippy
         run: cargo clippy
 
   test:

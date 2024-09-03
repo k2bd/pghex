@@ -159,6 +159,41 @@ impl Iterator for HexRingPathIter {
     }
 }
 
+pub struct HexSpiralPathIter {
+    center: CubeCoord,
+    current_radius: i32,
+    max_radius: i32,
+    current_iterator: HexRingPathIter,
+}
+
+impl HexSpiralPathIter {
+    fn new(center: CubeCoord, radius: i32) -> Self {
+        Self {
+            center,
+            max_radius: radius,
+            current_radius: 0,
+            current_iterator: HexRingPathIter::new(center, 0),
+        }
+    }
+}
+
+impl Iterator for HexSpiralPathIter {
+    type Item = CubeCoord;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(n) = self.current_iterator.next() {
+            return Some(n);
+        }
+        self.current_radius += 1;
+        if self.current_radius > self.max_radius {
+            return None;
+        }
+        self.current_iterator = HexRingPathIter::new(self.center, self.current_radius);
+
+        self.current_iterator.next()
+    }
+}
+
 impl From<Hex> for CubeCoord {
     fn from(value: Hex) -> Self {
         Self {
@@ -305,6 +340,10 @@ impl CubeCoord {
 
     pub fn ring(&self, radius: i32) -> HexRingPathIter {
         HexRingPathIter::new(*self, radius)
+    }
+
+    pub fn spiral(&self, radius: i32) -> HexSpiralPathIter {
+        HexSpiralPathIter::new(*self, radius)
     }
 }
 
@@ -485,24 +524,24 @@ mod tests {
         let dist = 2;
         let expected = [
             CubeCoord::new(0, 0, 0),
-            CubeCoord::new(1, -1, 0),
-            CubeCoord::new(1, 0, -1),
             CubeCoord::new(-1, 1, 0),
-            CubeCoord::new(-1, 0, 1),
-            CubeCoord::new(0, -1, 1),
             CubeCoord::new(0, 1, -1),
-            CubeCoord::new(0, -2, 2),
-            CubeCoord::new(1, -2, 1),
-            CubeCoord::new(2, -2, 0),
-            CubeCoord::new(-1, -1, 2),
-            CubeCoord::new(2, -1, -1),
-            CubeCoord::new(-2, 0, 2),
-            CubeCoord::new(2, 0, -2),
-            CubeCoord::new(-2, 1, 1),
-            CubeCoord::new(1, 1, -2),
+            CubeCoord::new(1, 0, -1),
+            CubeCoord::new(1, -1, 0),
+            CubeCoord::new(0, -1, 1),
+            CubeCoord::new(-1, 0, 1),
             CubeCoord::new(-2, 2, 0),
             CubeCoord::new(-1, 2, -1),
             CubeCoord::new(0, 2, -2),
+            CubeCoord::new(1, 1, -2),
+            CubeCoord::new(2, 0, -2),
+            CubeCoord::new(2, -1, -1),
+            CubeCoord::new(2, -2, 0),
+            CubeCoord::new(1, -2, 1),
+            CubeCoord::new(0, -2, 2),
+            CubeCoord::new(-1, -1, 2),
+            CubeCoord::new(-2, 0, 2),
+            CubeCoord::new(-2, 1, 1),
         ]
         .iter()
         .map(|&coord| coord + center)
@@ -586,5 +625,60 @@ mod tests {
         assert_eq!(ring_vec_2.len(), expected_2.len());
         let ring_2 = ring_vec_2.into_iter().collect::<HashSet<_>>();
         assert_eq!(ring_2, expected_2);
+    }
+
+    #[rstest]
+    #[case(CubeCoord::new(0, 0, 0))]
+    #[case(CubeCoord::new(100, -5, -95))]
+    fn test_spiral(#[case] center: CubeCoord) {
+        let expected_0 = [CubeCoord::new(0, 0, 0)]
+            .iter()
+            .map(|&coord| coord + center)
+            .collect::<Vec<_>>();
+        let expected_1 = [
+            CubeCoord::new(0, 0, 0),
+            CubeCoord::new(-1, 1, 0),
+            CubeCoord::new(0, 1, -1),
+            CubeCoord::new(1, 0, -1),
+            CubeCoord::new(1, -1, 0),
+            CubeCoord::new(0, -1, 1),
+            CubeCoord::new(-1, 0, 1),
+        ]
+        .iter()
+        .map(|&coord| coord + center)
+        .collect::<Vec<_>>();
+        let expected_2 = [
+            CubeCoord::new(0, 0, 0),
+            CubeCoord::new(-1, 1, 0),
+            CubeCoord::new(0, 1, -1),
+            CubeCoord::new(1, 0, -1),
+            CubeCoord::new(1, -1, 0),
+            CubeCoord::new(0, -1, 1),
+            CubeCoord::new(-1, 0, 1),
+            CubeCoord::new(-2, 2, 0),
+            CubeCoord::new(-1, 2, -1),
+            CubeCoord::new(0, 2, -2),
+            CubeCoord::new(1, 1, -2),
+            CubeCoord::new(2, 0, -2),
+            CubeCoord::new(2, -1, -1),
+            CubeCoord::new(2, -2, 0),
+            CubeCoord::new(1, -2, 1),
+            CubeCoord::new(0, -2, 2),
+            CubeCoord::new(-1, -1, 2),
+            CubeCoord::new(-2, 0, 2),
+            CubeCoord::new(-2, 1, 1),
+        ]
+        .iter()
+        .map(|&coord| coord + center)
+        .collect::<Vec<_>>();
+
+        let spiral_0 = center.spiral(0).collect::<Vec<_>>();
+        assert_eq!(spiral_0, expected_0);
+
+        let spiral_1 = center.spiral(1).collect::<Vec<_>>();
+        assert_eq!(spiral_1, expected_1);
+
+        let spiral_2 = center.spiral(2).collect::<Vec<_>>();
+        assert_eq!(spiral_2, expected_2);
     }
 }
