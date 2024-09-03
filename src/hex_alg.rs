@@ -90,7 +90,6 @@ impl Iterator for HexRangeIter {
         }
 
         let new_coord = self.center + CubeCoord::new(self.q, self.r, -self.q - self.r);
-        println!("{:?}", new_coord);
 
         self.r += 1;
         if self.r > r_max {
@@ -398,6 +397,29 @@ mod tests {
         .iter()
         .map(|&coord| coord + center)
         .collect::<HashSet<_>>();
+
+        let range_vec = center.range(dist).collect::<Vec<_>>();
+        assert_eq!(range_vec.len(), expected.len());
+
+        let range = range_vec.into_iter().collect::<HashSet<_>>();
+        assert_eq!(range, expected);
+    }
+
+    #[rstest]
+    #[case(CubeCoord::new(0, 0, 0), 5)]
+    #[case(CubeCoord::new(100, -5, -95), 5)]
+    #[case(CubeCoord::new(100, -5, -95), 100)]
+    /// A more dynamic test that the range function produces the same result as
+    /// iteratively adding neighbors
+    fn test_range_2(#[case] center: CubeCoord, #[case] dist: i32) {
+        let mut expected = HashSet::from([center]);
+        for _ in 0..dist {
+            expected = expected
+                .into_iter()
+                .map(|t| t.neighbors())
+                .flatten()
+                .collect();
+        }
 
         let range = center.range(dist).collect::<HashSet<_>>();
         assert_eq!(range, expected);
