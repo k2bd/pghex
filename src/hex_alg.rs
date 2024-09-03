@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub};
+use std::ops::{Add, AddAssign, Mul, Sub};
 
 use crate::Hex;
 
@@ -71,7 +71,7 @@ pub struct HexRangeIter {
 
 impl HexRangeIter {
     fn new(center: CubeCoord, dist: i32) -> Self {
-        HexRangeIter {
+        Self {
             center,
             dist,
             q: -dist,
@@ -98,6 +98,64 @@ impl Iterator for HexRangeIter {
         }
 
         Some(new_coord)
+    }
+}
+
+pub struct HexRingPathIter {
+    center: CubeCoord,
+    radius: i32,
+
+    current_position: CubeCoord,
+
+    direction_index: usize,
+    radius_index: i32,
+
+    /// Special-case flag for raidus=0
+    emitted_self: bool,
+}
+
+impl HexRingPathIter {
+    fn new(center: CubeCoord, radius: i32) -> Self {
+        Self {
+            center,
+            radius,
+            current_position: center + (NEIGHBOR_DIRS[4] * radius),
+            direction_index: 0,
+            radius_index: 0,
+            emitted_self: false,
+        }
+    }
+}
+
+impl Iterator for HexRingPathIter {
+    type Item = CubeCoord;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Special case for radius = 0 - only emit self
+        if self.radius == 0 {
+            if self.emitted_self {
+                return None;
+            } else {
+                self.emitted_self = true;
+                return Some(self.center);
+            }
+        }
+
+        if self.direction_index >= 6 {
+            return None;
+        }
+
+        let next_hex = self.current_position;
+
+        self.current_position += NEIGHBOR_DIRS[self.direction_index];
+
+        self.radius_index += 1;
+        if self.radius_index >= self.radius {
+            self.radius_index = 0;
+            self.direction_index += 1;
+        }
+
+        Some(next_hex)
     }
 }
 
@@ -132,6 +190,12 @@ impl Add for CubeCoord {
     }
 }
 
+impl AddAssign for CubeCoord {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl Sub for CubeCoord {
     type Output = CubeCoord;
 
@@ -141,6 +205,25 @@ impl Sub for CubeCoord {
             r: self.r - rhs.r,
             s: self.s - rhs.s,
         }
+    }
+}
+
+impl Mul<i32> for CubeCoord {
+    type Output = Self;
+
+    fn mul(self, rhs: i32) -> Self::Output {
+        Self {
+            q: self.q * rhs,
+            r: self.r * rhs,
+            s: self.s * rhs,
+        }
+    }
+}
+impl Mul<CubeCoord> for i32 {
+    type Output = CubeCoord;
+
+    fn mul(self, rhs: CubeCoord) -> Self::Output {
+        rhs * self
     }
 }
 
@@ -219,6 +302,10 @@ impl CubeCoord {
     pub fn range(&self, dist: i32) -> HexRangeIter {
         HexRangeIter::new(*self, dist)
     }
+
+    pub fn ring(&self, radius: i32) -> HexRingPathIter {
+        HexRingPathIter::new(*self, radius)
+    }
 }
 
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
@@ -276,23 +363,46 @@ mod tests {
     use rstest::*;
 
     #[rstest]
-    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 1, r: 2, s: -3},CubeCoord{q: 2, r: 4, s: -6} )]
-    #[case(CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0},CubeCoord{q: 0, r: 0, s: 0} )]
-    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: -1, r: -2, s: 3},CubeCoord{q: 0, r: 0, s: 0} )]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 2, r: 4, s: -6} )]
+    #[case(CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0} )]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: -1, r: -2, s: 3}, CubeCoord{q: 0, r: 0, s: 0} )]
     fn test_add(#[case] left: CubeCoord, #[case] right: CubeCoord, #[case] expected: CubeCoord) {
         assert_eq!(left + right, expected);
     }
 
     #[rstest]
-    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 1, r: 2, s: -3},CubeCoord{q: 0, r: 0, s: 0} )]
-    #[case(CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0},CubeCoord{q: 0, r: 0, s: 0} )]
-    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: -1, r: -2, s: 3},CubeCoord{q: 2, r: 4, s: -6} )]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 2, r: 4, s: -6} )]
+    #[case(CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0} )]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: -1, r: -2, s: 3}, CubeCoord{q: 0, r: 0, s: 0} )]
+    fn test_add_assign(
+        #[case] left: CubeCoord,
+        #[case] right: CubeCoord,
+        #[case] expected: CubeCoord,
+    ) {
+        let mut result = left.clone();
+        result += right;
+        assert_eq!(result, expected)
+    }
+
+    #[rstest]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: 0, r: 0, s: 0} )]
+    #[case(CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0}, CubeCoord{q: 0, r: 0, s: 0} )]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, CubeCoord{q: -1, r: -2, s: 3}, CubeCoord{q: 2, r: 4, s: -6} )]
     fn test_subtract(
         #[case] left: CubeCoord,
         #[case] right: CubeCoord,
         #[case] expected: CubeCoord,
     ) {
         assert_eq!(left - right, expected);
+    }
+
+    #[rstest]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, 0, CubeCoord{q: 0, r: 0, s: 0} )]
+    #[case(CubeCoord{q: 0, r: 0, s: 0}, 100, CubeCoord{q: 0, r: 0, s: 0} )]
+    #[case(CubeCoord{q: 1, r: 2, s: -3}, 2, CubeCoord{q: 2, r: 4, s: -6} )]
+    fn test_multiply(#[case] left: CubeCoord, #[case] right: i32, #[case] expected: CubeCoord) {
+        assert_eq!(left * right, expected);
+        assert_eq!(right * left, expected);
     }
 
     #[rstest]
@@ -423,5 +533,58 @@ mod tests {
 
         let range = center.range(dist).collect::<HashSet<_>>();
         assert_eq!(range, expected);
+    }
+
+    #[rstest]
+    #[case(CubeCoord::new(0, 0, 0))]
+    #[case(CubeCoord::new(100, -5, -95))]
+    fn test_ring(#[case] center: CubeCoord) {
+        let expected_0 = [CubeCoord::new(0, 0, 0)]
+            .iter()
+            .map(|&coord| coord + center)
+            .collect::<HashSet<_>>();
+        let expected_1 = [
+            CubeCoord::new(1, -1, 0),
+            CubeCoord::new(1, 0, -1),
+            CubeCoord::new(-1, 1, 0),
+            CubeCoord::new(-1, 0, 1),
+            CubeCoord::new(0, -1, 1),
+            CubeCoord::new(0, 1, -1),
+        ]
+        .iter()
+        .map(|&coord| coord + center)
+        .collect::<HashSet<_>>();
+        let expected_2 = [
+            CubeCoord::new(0, -2, 2),
+            CubeCoord::new(1, -2, 1),
+            CubeCoord::new(2, -2, 0),
+            CubeCoord::new(-1, -1, 2),
+            CubeCoord::new(2, -1, -1),
+            CubeCoord::new(-2, 0, 2),
+            CubeCoord::new(2, 0, -2),
+            CubeCoord::new(-2, 1, 1),
+            CubeCoord::new(1, 1, -2),
+            CubeCoord::new(-2, 2, 0),
+            CubeCoord::new(-1, 2, -1),
+            CubeCoord::new(0, 2, -2),
+        ]
+        .iter()
+        .map(|&coord| coord + center)
+        .collect::<HashSet<_>>();
+
+        let ring_vec_0 = center.ring(0).collect::<Vec<_>>();
+        assert_eq!(ring_vec_0.len(), expected_0.len());
+        let ring_0 = ring_vec_0.into_iter().collect::<HashSet<_>>();
+        assert_eq!(ring_0, expected_0);
+
+        let ring_vec_1 = center.ring(1).collect::<Vec<_>>();
+        assert_eq!(ring_vec_1.len(), expected_1.len());
+        let ring_1 = ring_vec_1.into_iter().collect::<HashSet<_>>();
+        assert_eq!(ring_1, expected_1);
+
+        let ring_vec_2 = center.ring(2).collect::<Vec<_>>();
+        assert_eq!(ring_vec_2.len(), expected_2.len());
+        let ring_2 = ring_vec_2.into_iter().collect::<HashSet<_>>();
+        assert_eq!(ring_2, expected_2);
     }
 }

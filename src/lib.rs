@@ -94,6 +94,11 @@ fn hexes_in_range(coord: Hex, dist: i32) -> SetOfIterator<'static, Hex> {
     SetOfIterator::new(CubeCoord::from(coord).range(dist).map(|cube| cube.into()))
 }
 
+#[pg_extern]
+fn ring_path(coord: Hex, radius: i32) -> SetOfIterator<'static, Hex> {
+    SetOfIterator::new(CubeCoord::from(coord).ring(radius).map(|cube| cube.into()))
+}
+
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
@@ -155,6 +160,15 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(result, Hex { q: -5, r: 1 })
+    }
+
+    #[pg_test]
+    /// N.B. unfortunately at the moment I can only work out how to get the first result...
+    fn test_ring_path() {
+        let result = Spi::get_one::<Hex>("select ring_path('[-3,1]'::hex, 2)")
+            .unwrap()
+            .unwrap();
+        assert_eq!(result, Hex { q: -5, r: 3 })
     }
 }
 

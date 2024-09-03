@@ -10,6 +10,8 @@ jobs:
         run: rustup toolchain install stable --profile minimal
       - name: Install PGRX
         run: cargo install --locked cargo-pgrx
+      - name: Setup PGRX
+        run: cargo pgrx init
       - name: Linting
         run: cargo clippy
 
