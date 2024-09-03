@@ -22,9 +22,11 @@ pg_test = []
 
 [dependencies]
 pgrx = "=0.12.1"
+serde = "1.0.209"
 
 [dev-dependencies]
 pgrx-tests = "=0.12.1"
+rstest = "0.22.0"
 
 [profile.dev]
 panic = "unwind"
