@@ -9,6 +9,59 @@ pub struct CubeCoord {
     s: i32,
 }
 
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub struct FloatCubeCoord {
+    q: f64,
+    r: f64,
+    s: f64,
+}
+
+const EPSILON_HEX: FloatCubeCoord = FloatCubeCoord {
+    q: 1e-6,
+    r: 2e-6,
+    s: -3e-6,
+};
+
+pub struct LineDrawIter {
+    start: FloatCubeCoord,
+    end: FloatCubeCoord,
+    distance: i32,
+    t_unit: f64,
+    next_i: i32,
+}
+
+impl LineDrawIter {
+    fn new(start: CubeCoord, end: CubeCoord) -> Self {
+        let distance = start.dist(end);
+        Self {
+            start: start.into(),
+            end: FloatCubeCoord::from(end) + EPSILON_HEX,
+            distance,
+            t_unit: 1f64 / (distance as f64),
+            next_i: 0,
+        }
+    }
+}
+
+impl Iterator for LineDrawIter {
+    type Item = CubeCoord;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_i > self.distance {
+            return None;
+        }
+
+        let next_coord = CubeCoord::from(
+            self.start
+                .cube_lerp(self.end, (self.next_i as f64) * self.t_unit),
+        );
+
+        self.next_i += 1;
+
+        Some(next_coord)
+    }
+}
+
 impl From<Hex> for CubeCoord {
     fn from(value: Hex) -> Self {
         Self {
@@ -52,6 +105,30 @@ impl Sub for CubeCoord {
     }
 }
 
+impl Add for FloatCubeCoord {
+    type Output = FloatCubeCoord;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            q: self.q + rhs.q,
+            r: self.r + rhs.r,
+            s: self.s + rhs.s,
+        }
+    }
+}
+
+impl Sub for FloatCubeCoord {
+    type Output = FloatCubeCoord;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            q: self.q - rhs.q,
+            r: self.r - rhs.r,
+            s: self.s - rhs.s,
+        }
+    }
+}
+
 const NEIGHBOR_DIRS: [CubeCoord; 6] = [
     CubeCoord { q: 1, r: 0, s: -1 },
     CubeCoord { q: 1, r: -1, s: 0 },
@@ -71,7 +148,7 @@ const DIAGONAL_DIRS: [CubeCoord; 6] = [
 ];
 
 impl CubeCoord {
-    pub fn new(q: i32, r: i32, s: i32) -> Self {
+    fn new(q: i32, r: i32, s: i32) -> Self {
         Self { q, r, s }
     }
 
@@ -94,6 +171,57 @@ impl CubeCoord {
     /// Get the hex distance to the other hex
     pub fn dist(&self, other: CubeCoord) -> i32 {
         (*self - other).abs()
+    }
+
+    pub fn linedraw(&self, other: CubeCoord) -> LineDrawIter {
+        LineDrawIter::new(*self, other)
+    }
+}
+
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
+}
+
+impl FloatCubeCoord {
+    fn cube_lerp(&self, other: Self, t: f64) -> Self {
+        Self {
+            q: lerp(self.q, other.q, t),
+            r: lerp(self.r, other.r, t),
+            s: lerp(self.s, other.s, t),
+        }
+    }
+}
+
+impl From<FloatCubeCoord> for CubeCoord {
+    /// Round a FloatCubeCoord to a CubeCoord
+    fn from(value: FloatCubeCoord) -> Self {
+        let mut q = value.q.round_ties_even() as i32;
+        let mut r = value.r.round_ties_even() as i32;
+        let mut s = value.s.round_ties_even() as i32;
+
+        let q_diff = (q as f64 - value.q).abs();
+        let r_diff = (r as f64 - value.r).abs();
+        let s_diff = (s as f64 - value.s).abs();
+
+        if (q_diff > r_diff) && (q_diff > s_diff) {
+            q = -r - s;
+        } else if (r_diff > s_diff) {
+            r = -q - s;
+        } else {
+            s = -q - r;
+        }
+
+        CubeCoord::new(q, r, s)
+    }
+}
+
+impl From<CubeCoord> for FloatCubeCoord {
+    fn from(value: CubeCoord) -> Self {
+        Self {
+            q: value.q as f64,
+            r: value.r as f64,
+            s: value.s as f64,
+        }
     }
 }
 
@@ -167,5 +295,25 @@ mod tests {
     fn test_distance(#[case] left: CubeCoord, #[case] right: CubeCoord, #[case] expected: i32) {
         assert_eq!(left.dist(right), expected);
         assert_eq!(right.dist(left), expected);
+    }
+
+    #[rstest]
+    #[case(CubeCoord::new(0, 0, 0), CubeCoord::new(0, 0, 0), vec![CubeCoord::new(0, 0, 0)])]
+    #[case(CubeCoord::new(-3, 0, 3), CubeCoord::new(3, -3, 0), vec![
+        CubeCoord::new(-3, 0, 3),
+        CubeCoord::new(-2, 0, 2),
+        CubeCoord::new(-1, -1, 2),
+        CubeCoord::new(0, -1, 1),
+        CubeCoord::new(1, -2, 1),
+        CubeCoord::new(2, -2, 0),
+        CubeCoord::new(3, -3, 0),
+    ])]
+    fn test_linedraw(
+        #[case] from: CubeCoord,
+        #[case] to: CubeCoord,
+        #[case] expected: Vec<CubeCoord>,
+    ) {
+        let line = from.linedraw(to).collect::<Vec<_>>();
+        assert_eq!(line, expected);
     }
 }

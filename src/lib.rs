@@ -65,6 +65,16 @@ fn neighbors(coord: Hex) -> SetOfIterator<'static, Hex> {
 }
 
 #[pg_extern]
+fn diagonals(coord: Hex) -> SetOfIterator<'static, Hex> {
+    SetOfIterator::new(
+        hex_alg::CubeCoord::from(coord)
+            .diagonals()
+            .into_iter()
+            .map(|cube| cube.into()),
+    )
+}
+
+#[pg_extern]
 fn dist(coord: Hex, other: Hex) -> i32 {
     hex_alg::CubeCoord::from(coord).dist(hex_alg::CubeCoord::from(other))
 }
@@ -90,11 +100,20 @@ mod tests {
 
     #[pg_test]
     /// N.B. unfortunately at the moment I can only work out how to get the first result...
-    fn test_neighbors_a() {
+    fn test_neighbors() {
         let result = Spi::get_one::<Hex>("select neighbors('[1,2]'::hex)")
             .unwrap()
             .unwrap();
         assert_eq!(result, Hex { q: 2, r: 2 })
+    }
+
+    #[pg_test]
+    /// N.B. unfortunately at the moment I can only work out how to get the first result...
+    fn test_diagonals() {
+        let result = Spi::get_one::<Hex>("select diagonals('[1,2]'::hex)")
+            .unwrap()
+            .unwrap();
+        assert_eq!(result, Hex { q: 3, r: 1 })
     }
 
     #[pg_test]
