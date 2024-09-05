@@ -1,5 +1,7 @@
 # pghex
 
+[![CI](https://github.com/k2bd/pghex/actions/workflows/ci.yml/badge.svg)](https://github.com/k2bd/pghex/actions/workflows/ci.yml)
+
 This is a Postgres extension adding Hex tiles and related operations to Postgres.
 
 ## Example
@@ -13,7 +15,8 @@ create extension pghex;
 
 ```sql
 create table obstacles ( coord hex );
-insert into obstacles ( coord ) values ('[0, -2]'), ('[1, -2]'), ('[3, -2]'), ('[4, -3]'), ('[4, -2]'), ('[-2, 3]'), ('[-2, 2]'), ('[-2, 1]'), ('[-3, 1]');
+insert into obstacles ( coord )
+    values ('[0, -2]'), ('[1, -2]'), ('[3, -2]'), ('[4, -3]'), ('[4, -2]'), ('[-2, 3]'), ('[-2, 2]'), ('[-2, 1]'), ('[-3, 1]');
 ```
 
 ```sql
@@ -36,7 +39,8 @@ select * from obstacles;
 
 ```sql
 create table units ( name varchar, vision_range int, position hex );
-insert into units (name, vision_range, position) values ('Hero', 6, '[0, 1]'), ('Goblin 1', 3, '[5, 1]');
+insert into units (name, vision_range, position)
+    values ('Hero', 6, '[0, 1]'), ('Goblin 1', 3, '[5, 1]');
 ```
 
 ```sql
@@ -45,25 +49,26 @@ select * from units;
 ```
    name   | vision_range |   position    
 ----------+--------------+---------------
- Hero     |            6 | {"q":0,"r":0}
+ Hero     |            6 | {"q":0,"r":1}
  Goblin 1 |            3 | {"q":5,"r":1}
 (2 rows)
-
 ```
 
-We can then, for example, create a query for the coordinates that are visible to our units:
+We can then, for example, create a query for the coordinates that are [visible to each unit](https://www.redblobgames.com/grids/hexagons/#field-of-view):
 
 ```sql
 with available_tiles as (
-    select name,
-    position,
-    hexes_in_range(position, vision_range) tile from units
+    select
+        name,
+        position,
+        hexes_in_range(position, vision_range) tile
+    from units
 )
 select name, tile from available_tiles
-    where not exists(
-        select * from obstacles
-        where coord in (select * from linedraw(position, tile))
-    );
+where not exists(
+    select coord from obstacles
+    where coord in (select * from linedraw(position, tile))
+);
 ```
 
 ```
@@ -84,7 +89,7 @@ Goblin 1 | {"q":8,"r":1}
 ## Installing
 
 At the moment this can only be installed in a development environment using `cargo pgrx run`.
-Packaging and distribting will be done later.
+Packaging and distributing will be done later.
 
 ## Developing
 
@@ -92,7 +97,7 @@ Requirements:
 - [Rust](https://www.rust-lang.org/tools/install)
 - [pgrx](https://github.com/pgcentralfoundation/pgrx?tab=readme-ov-file#getting-started)
 
-### Commaands
+### Commands
 
 - `cargo pgrx test` - Run tests
 - `cargo pgrx run` - Open a local psql terminal to test out the extension
