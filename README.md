@@ -6,7 +6,7 @@ This is a Postgres extension adding Hex tiles and related operations to Postgres
 
 ## Example
 
-Here's an example where we create a couple tables representing a hero exploring a dungeon.
+Here's an example where we create a couple tables representing a hero exploring a dungeon on a hexagonal grid.
 One table represents the walls that restrict vision, and another represents units positioned in the dungeon.
 
 ```sql
